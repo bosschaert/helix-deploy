@@ -94,7 +94,7 @@ const { Response } = require('@adobe/fetch');
  * @param {HEDYContext} context Universal API Context
  * @returns {Response} a status response
  */
-async function main(req, context) {
+module.exports.main = async function main(req, context) {
   const result = '{"result": "it works!"}';
   return new Response(result, {
     status: 200,
@@ -108,7 +108,7 @@ package.json:
   "name": "my-project",
   "version": "1.0",
   "private": true,
-  "main": "index.js",
+  "main": "src/index.js",
   "dependencies": {
     "@adobe/fetch": "4.1.0"
   }
@@ -162,7 +162,7 @@ Set the `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` env
 At this point you should be ready to deploy your function.
 
 ```
-$ npx hedy --build --verbose --directory ~/proj/hedy/temp --entryFile ~/proj/hedy/proj1/pure-action/src/index.js --deploy --target aws --aws-region eu-west-1 --aws-role 'arn:aws:iam::148835428639:role/HedyInvocationRole' --aws-api 99q7f1czdf -l minor --name "myfunc@1"
+$ npx hedy --build --verbose --directory ~/proj/hedy/temp --entryFile ~/proj/hedy/myproj/src/index.js --deploy --target aws --aws-region eu-west-1 --aws-role 'arn:aws:iam::148835428639:role/HedyInvocationRole' --aws-api 99q7f1czdf -l minor --name "myfunc@1"
 ```
 
 if all goes well, the the output will end with something like this:
@@ -175,5 +175,10 @@ if all goes well, the the output will end with something like this:
 }
 ```
 
-Now you can invoke your function as follows:
+Now you can invoke your function as follows (note the URL is as reported by the `hedy` command with a slight change to the version number):
+```
+$ curl https://99q7f1czdf.execute-api.eu-west-1.amazonaws.com/default/myfunc/v0.0
+{"result": "it works!"}
+```
+
 
