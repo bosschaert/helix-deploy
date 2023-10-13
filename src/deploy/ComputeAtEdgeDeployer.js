@@ -15,7 +15,8 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs/promises';
 import tar from 'tar';
-import Fastly from '@adobe/fastly-native-promises';
+// import Fastly from '@adobe/fastly-native-promises';
+import Fastly from 'fastly';
 import BaseDeployer from './BaseDeployer.js';
 import ComputeAtEdgeConfig from './ComputeAtEdgeConfig.js';
 
@@ -52,7 +53,13 @@ export default class ComputeAtEdgeDeployer extends BaseDeployer {
 
   init() {
     if (this.ready() && !this._fastly) {
-      this._fastly = Fastly(this._cfg.auth, this._cfg.service, 60000);
+      // this._fastly = Fastly(this._cfg.auth, this._cfg.service, 60000);
+      Fastly.ApiClient.instance.authenticate(this._cfg.auth);
+      this._fastly = new Fastly.BackendApi();
+      this._fastlyVersion = new Fastly.VersionApi();
+      this._fastlyPackage = new Fastly.PackageApi();
+      // const x = new Fastly.AclApi();
+      // this._fastly.createBackend();
     }
   }
 
@@ -119,9 +126,58 @@ service_id = ""
   }
 
   async deploy() {
-    const buf = await this.bundle();
-    this.init();
+    try {
+      const buf = await this.bundle();
+      this.init();
 
+      const host = this._cfg.fastlyGateway;
+
+      const verBackend = {
+        service_id: this._cfg.service,
+      };
+      const verResp = await this._fastlyVersion.createServiceVersion(verBackend);
+      const version = verResp.number;
+
+      const pkgOptions = {
+        service_id: this._cfg.service,
+        version_id: version,
+        _package: buf,
+      };
+      const pkgResp = await this._fastlyPackage.putPackage(pkgOptions);
+      console.log('*** Pkg', pkgResp);
+
+      const backend = {
+        service_id: this._cfg.service,
+        version_id: version,
+
+        hostname: host,
+        ssl_cert_hostname: host,
+        ssl_sni_hostname: host,
+        address: host,
+        override_host: host,
+        name: 'gateway',
+        error_threshold: 0,
+        first_byte_timeout: 60000,
+        weight: 100,
+        connect_timeout: 5000,
+        port: 443,
+        between_bytes_timeout: 10000,
+        shield: '', // 'bwi-va-us',
+        max_conn: 200,
+        use_ssl: true,
+      };
+      const resp = await this._fastly.createBackend(backend);
+      console.log('***', resp);
+
+      // if resp is ok
+      verBackend.version_id = version;
+      const actresp = await this._fastlyVersion.activateServiceVersion(verBackend);
+      console.log('***', actresp);
+    } catch (e) {
+      this.log.error(`Problem during deploy. Status ${e.status}: ${JSON.stringify(e.body)}`);
+      throw e;
+    }
+    /*
     await this._fastly.transact(async (version) => {
       this.log.debug('--: uploading package to fastly');
       await this._fastly.writePackage(version, buf);
@@ -153,6 +209,7 @@ service_id = ""
       this.log.debug(`--: updating gateway backend: ${host}`);
       await this._fastly.writeBackend(version, 'gateway', backend);
     }, true);
+    */
   }
 
   async updatePackage() {
